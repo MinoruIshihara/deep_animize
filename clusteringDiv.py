@@ -15,8 +15,27 @@ path = os.getcwd() + '\\images'
 IMAGE_W = 286
 IMAGE_H = 286
 
+def pil2CV(Img):
+    imgArr = numpy.array(Img, dtype = numpy.uint8)
+    return cv2.cvtColor(imgArr, cv2.COLOR_RGB2BGR)
+
 def BGR2RGB(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+def compensateGamma(Img):
+    gamma = 1 / numpy.sqrt(Img.mean()) * 13
+    g_table = numpy.array([((i / 255.0) ** (1 / gamma)) * 255 for i in numpy.arange(0, 256)]).astype("uint8")
+    Img = cv2.LUT(Img, g_table)
+    return Img
+
+def compensateV(Img):
+    Img = cv2.cvtColor(Img, cv2.COLOR_BGR2HSV)
+    for i, row in enumerate(Img):
+        for j, pix in enumerate(row):
+            Img[i][j][1] = 255
+            Img[i][j][2] = 128 + (Img[i][j][2] - 128) * 0.8
+    Img = cv2.cvtColor(Img, cv2.COLOR_HSV2BGR)
+    return Img
 
 def bilateralFilterRepetition(Img, kSize, sigma1, sigma2, iteration):
     for i in range(iteration):
@@ -27,25 +46,6 @@ def laplasianFilter(Img):
     edgeKernel = numpy.array([[0,-1,0], [-1,5,-1], [0,-1,0]], numpy.float32)
     Img = cv2.filter2D(Img, -1, edgeKernel)
     return Img
-
-def compensationImg(Img):
-    gamma = 1 / numpy.sqrt(Img.mean()) * 13
-    g_table = numpy.array([((i / 255.0) ** (1 / gamma)) * 255 for i in numpy.arange(0, 256)]).astype("uint8")
-    Img = cv2.LUT(Img, g_table)
-    return Img
-
-def compensationV(Img):
-    Img = cv2.cvtColor(Img, cv2.COLOR_BGR2HSV)
-    for i, row in enumerate(Img):
-        for j, pix in enumerate(row):
-            Img[i][j][1] = 255
-            Img[i][j][2] = 128 + (Img[i][j][2] - 128) * 0.8
-    Img = cv2.cvtColor(Img, cv2.COLOR_HSV2BGR)
-    return Img
-
-def pil2CV(Img):
-    imgArr = numpy.array(Img, dtype = numpy.uint8)
-    return cv2.cvtColor(imgArr, cv2.COLOR_RGB2BGR)
 
 def k_means(Img, k):
     shape = Img.shape
@@ -72,7 +72,7 @@ def x_means(Img):
     return Img, centerColors
 
 def segmentation(Img):
-    Img = compensationImg(Img)
+    Img = compensateGamma(Img)
     mImg = cv2.medianBlur(Img, 7)
     qImg = k_means(mImg, 6)[0]
     return qImg
@@ -83,19 +83,11 @@ def maskImg(Img, qImg, colors):
         imgMask = cv2.inRange(qImg, maskColor, maskColor)
         maskedImgs.append(cv2.bitwise_and(Img, Img, mask=imgMask))
     
-    PIC_NUM = len(colors)
-    #resultImgFigure = pyplot.figure(figsize = (12.0,40.0))    
-    
-    #for i, maskedImg in enumerate(maskedImgs):
-    #    resultImgFigure.add_subplot(PIC_NUM, 1, i+1)
-    #    pyplot.imshow(cv2.cvtColor(maskedImg, cv2.COLOR_BGR2RGB))
-        
     return maskedImgs
 
 def meanColor(img):
     backGroundColor = [0, 0, 0]
     clipImg = img[(img != backGroundColor).all(axis = 2)]
-    #print(clipImg)
     return numpy.mean(clipImg, axis=0)
 
 def replaceColorMean(img, qImg, colors):
@@ -103,109 +95,26 @@ def replaceColorMean(img, qImg, colors):
     maskedImgs = maskImg(img, qImg, colors)
     for maskedImg in maskedImgs:
         colorMeans.append(meanColor(maskedImg))
-        #print(meanColor(maskedImg))
     for (color, colorMean) in zip(colors, colorMeans):
         qImg[numpy.where((qImg == color).all(axis = 2))] = colorMean
     return qImg
 
-def segmentation720(rawImg):
-    PIC_NUM = 6
-
-    resultImgFigure = pyplot.figure(figsize = (12.0,40.0))
-
-    resultImgFigure.add_subplot(PIC_NUM, 1, 1)
-    pyplot.imshow(cv2.cvtColor(rawImg, cv2.COLOR_BGR2RGB))
-
-    filteringImg = compensationImg(rawImg)
-    resultImgFigure.add_subplot(PIC_NUM, 1, 2)
-    pyplot.imshow(cv2.cvtColor(filteringImg, cv2.COLOR_BGR2RGB))
-
-    filteringImg = bilateralFilterRepetition(filteringImg, 35, 35, 25, 10)
-    filteringImg = bilateralFilterRepetition(filteringImg, 91, 35, 25, 10)
-    resultImgFigure.add_subplot(PIC_NUM, 1, 3)
-    pyplot.imshow(cv2.cvtColor(filteringImg, cv2.COLOR_BGR2RGB))
-    #cv2.imwrite('/content/drive/My Drive/experiment/contents/' + imageTitle + '_bilateral.jpg', filteringImg)
-
-    filteringImg = cv2.medianBlur(filteringImg, 9)
-    resultImgFigure.add_subplot(PIC_NUM, 1, 4)
-    pyplot.imshow(cv2.cvtColor(filteringImg, cv2.COLOR_BGR2RGB))
-    #cv2.imwrite('/content/drive/My Drive/experiment/contents/' + imageTitle + '_median.jpg', filteringImg)
-
-    quantizedImg = k_means(filteringImg)[0]
-    resultImgFigure.add_subplot(PIC_NUM, 1, 5)
-    pyplot.imshow(cv2.cvtColor(quantizedIg, cv2.COLOR_BGR2RGB))
-    #cv2.imwrite('/content/drive/My Drive/experiment/contents/' + imageTitle + '_kmeans.jpg', quantizedImg)
-
-    quantizedImg = cv2.medianBlur(quantizedImg, 91)
-    resultImgFigure.add_subplot(PIC_NUM, 1, 6)
-    pyplot.imshow(cv2.cvtColor(quantizedImg, cv2.COLOR_BGR2RGB))
-    #cv2.imwrite('/content/drive/My Drive/experiment/contents/' + imageTitle + '_kmeans_median.jpg', quantizedImg)
-
-def segmentation0(Img):
-    PIC_NUM = 3
-    #resultImgFigure = pyplot.figure(figsize = (8.0,16.0))
-
-    Img = compensationImg(Img)
-    #Img = compensationV(Img)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 1)
-    #pyplot.imshow(BGR2RGB(Img))
-
-    mImg = cv2.medianBlur(Img, 5)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 2)
-    #pyplot.imshow(BGR2RGB(mImg))
-
-    qImg, centers= x_means(mImg)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 3)
-    #pyplot.imshow(BGR2RGB(qImg))
-
-    return qImg, centers
-
 def segmentation1(Img):
-    #PIC_NUM = 3
-    #resultImgFigure = pyplot.figure(figsize = (8.0,16.0))
-
-    Img = compensationImg(Img)
-    Img = compensationV(Img)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 1)
-    #pyplot.imshow(BGR2RGB(Img))
-
+    Img = compensateGamma(Img)
+    Img = compensateV(Img)
     mImg = cv2.medianBlur(Img, 5)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 2)
-    #pyplot.imshow(BGR2RGB(mImg))
-
     qImg, centers = x_means(mImg)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 3)
-    #pyplot.imshow(BGR2RGB(qImg))
 
     return qImg, centers
 
 def segmentation2(Img):
     PIC_NUM = 3
-    #resultImgFigure = pyplot.figure(figsize = (8.0,16.0))
-
-    Img = compensationImg(Img)
-    Img = compensationV(Img)    
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 1)
-    #pyplot.imshow(BGR2RGB(Img))
-
+    Img = compensateGamma(Img)
+    Img = compensateV(Img)    
     mImg = cv2.medianBlur(Img, 5)
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 2)
-    #pyplot.imshow(BGR2RGB(mImg))
-
     kmeansImg = k_means(mImg, 4)
     qImg = kmeansImg[0]
     imgCenters = kmeansImg[1]
-
-    #resultImgFigure.add_subplot(PIC_NUM, 1, 3)
-    #pyplot.imshow(BGR2RGB(qImg))
 
     return qImg, imgCenters
 
@@ -224,7 +133,6 @@ def trimImg(imgWidth, imgHeight):
     print('Input files path' + path + '\\contents\\square\\*.JPG')
     for fileNum, imagePath in enumerate(inputFiles):
         fileName = os.path.basename(imagePath).split('.')[0]
-        #fileName = 'ArseniXC'
         inputImage = cv2.imread(imagePath)
         rawImgH, rawImgW = (inputImage.shape[0], inputImage.shape[1])
         if rawImgW > rawImgH:
@@ -238,35 +146,3 @@ if __name__ == '__main__':
     print('running.....')
     trimImg(IMAGE_W, IMAGE_H)
     makeDataset()
-
-#imageTitle = 'content25'
-#fileType = 'JPG' 
-
-#inputFiles = glob.glob(path + 'contents/*.jpg')
-#for imagePath in inputFiles:
-#    fileName = os.path.basename(imagePath).split('.')[0]
-#    inputImg = cv2.imread(imagePath)
-#    inputImg = cv2.resize(inputImg, (256, 256))
-#    cv2.imwrite(path + '/cycleGAN/dataset/train/input/' + fileName + ".jpg", inputImg)
-
-#segImg, centers = segmentation2(inputImg)
-
-#maskImg(inputImg, segImg, centers)
-#segImg = replaceColorMean(inputImg, segImg, centers)
-#pyplot.imshow(BGR2RGB(segImg))
-
-#inputImg = cv2.imread(path + '/example/content/content41.JPG')
-#qImg, imgCenters = segmentation2(inputImg)
-#masks = maskImg(inputImg, qImg, imgCenters)
-
-#resultImgFigure = pyplot.figure(figsize = (8.0,16.0))
-
-#for i, mask in enumerate(masks):
-#    cv2.imwrite(path + '/example/content/content41('+str(i)+').jpg', mask)
-    #resultImgFigure.add_subplot(4, 1, i)
-#    pyplot.imshow(BGR2RGB(Img))
-
-#inputImg = cv2.imread(path + '/example/content/content41.JPG')
-#qImg, imgCenters = segmentation2(inputImg)
-#segImg = replaceColorMean(inputImg, qImg, imgCenters)
-#cv2.imwrite(path + '/example/content41(seg2).jpg', segImg)
