@@ -2,3 +2,4 @@
 checkpoints/*
 logs/*
 /images/dataset/pix2pix/result/1000_results
+/images/*
